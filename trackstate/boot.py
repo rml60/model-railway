@@ -21,6 +21,8 @@ from wlancfg import SSID, PASSPHRASE
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
+CFGFILENAME='config.ini'
+
 NETIP='192.168.178.122'
 NETDNS='192.168.178.1'
 NETGW='192.168.178.1'
@@ -32,15 +34,39 @@ CSPORT=15731
 DEVICEID = 0
 CONTACTBASE = 4 * 16 # (trackstateModulNumber - 1) * 16 contacts 
 
-SLCPIN=22
-SDAPIN=21
-OLEDWIDTH = 128
-OLEDHEIGHT = 64
+#SLCPIN=22
+#SDAPIN=21
+#OLEDWIDTH = 128
+#OLEDHEIGHT = 64
+
+#-------------------------------------------------------------------------------
+# functions
+#-------------------------------------------------------------------------------
+def getConfig(cfgFilename):
+  """
+  """
+  config = None
+  try:
+    with open(cfgFilename) as cfg:
+      lines = cfg.readlines()
+    lines = [x.replace('\n','').replace('\r','') for x in lines]
+    config = dict()
+    for line in lines:
+      lineParts = line.split('=')
+      if len(lineParts) > 1:
+        config[lineParts[0].upper()] = lineParts[1]
+  except Exception as e:
+    print(e)
+    print('{} not found.'.format(cfgFilename))
+  return config
+
 #-------------------------------------------------------------------------------
 # setup
 #-------------------------------------------------------------------------------
-i2c = SoftI2C(scl=Pin(SLCPIN), sda=Pin(SDAPIN))
-oled = oledssd1306.Ssd1306I2c(OLEDWIDTH, OLEDHEIGHT, i2c)
+cfg = getConfig(CFGFILENAME)
+
+i2c = SoftI2C(scl=Pin(int(cfg['SCLPIN'])), sda=Pin(int(cfg['SDAPIN'])))
+oled = oledssd1306.Ssd1306I2c(int(cfg['OLEDWIDTH']), int(cfg['OLEDHIGHT']), i2c)
 
 macAddr = int.from_bytes(WLAN().config('mac'), 'little')
 macAddrStr = ubinascii.hexlify(WLAN().config('mac'),':').decode()
@@ -49,7 +75,8 @@ oled.fill(0)
 oled.text('WLAN connect ...',0,1)
 oled.show()
 wlan = WLAN(STA_IF)
-wlan.ifconfig((NETIP, NETMASK, NETGW, NETDNS))
+if cfg['IP'] != '':
+ wlan.ifconfig((cfg['IP'], cfg['MASK'], cfg['GW'], cfg['DNS']))
 wlan.active(True)
 wlan.connect(SSID, PASSPHRASE)
 while wlan.isconnected() == False:

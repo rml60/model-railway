@@ -15,12 +15,8 @@
     ---------------------------------------------------------------------------
     (c) 2021
 """
+from machine import Timer
 import time
-
-try:
-  import usocket as socket
-except:
-  import socket
 
 import hc4067
 from mcan import mcanhash, mcancommand, states
@@ -28,7 +24,7 @@ from mcan import mcanhash, mcancommand, states
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-VERSION = '0.03'
+VERSION = '0.04'
 TIMER = Timer(0)
 BUFFERSIZE = 13
 
@@ -44,24 +40,6 @@ def handleInterrupt(TIMER):
   #currState = currState | in0.value()*2**0
   #currState = currState | in1.value()*2**1
   currState = mp.signalValueByte
-
-def getConfig(cfgFilename):
-  """
-  """
-  config = None
-  config = dict()
-  try:
-    with open(cfgFilename) as cfg:
-      lines = cfg.readlines()
-    lines = [x.replace('\n','').replace('\r','') for x in lines]
-    for line in lines:
-      lineParts = line.split('=')
-      if len(lineParts) > 1:
-        config[lineParts[0]] = lineParts[1]
-  except Exception as e:
-    print(e)
-    print('{} not found.'.format(cfgFilename))
-  return config
 
 class OledInfoText():
   def __init__(self, oled, ipAddrStr, mcanHash, versionStr=VERSION):
