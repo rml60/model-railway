@@ -1,9 +1,7 @@
 """ trackstate (main.py) MicroPython script
     
-    Sends trackstates (16 contacts) as can-frame bytearray via WLAN
-    
-    Protocol: Maerklin can-bus
-    
+    Sends trackstates (16 contacts) as can-frame bytearray via WLAN (Protocol:
+    Maerklin can-bus).
     The can command for trackstate (16) must be send with active responsebit!
     
     Author: Rainer Maier-Lohmann
@@ -26,72 +24,74 @@ from mcan import mcanhash, mcancommand, states
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-VERSION = '0.06'
-TIMER = Timer(0)
-BUFFERSIZE = 13
-STATE_YPOS = 4
+VERSION = '0.07'
 
 #-------------------------------------------------------------------------------
 # classes and functions
 #-------------------------------------------------------------------------------
-# def handleInterrupt(TIMER):
-#   """
-#   """
-#   global currState
-#   currState = 0
-#   # inx.value ist entweder 0 oder 1
-#   #currState = currState | in0.value()*2**0
-#   #currState = currState | in1.value()*2**1
-#   currState = mp.valueByte
-
 class InfoText():
-  def __init__(self, display, ipAddrStr, mcanHash, csipStr, versionStr=VERSION):
-    """
-    """
-    self.__display = display
-    self.__version = 'Hash:{:4}  v{:>4}'.format(str(mcanHash), versionStr)
-    #self.__hash = 'MCAN-Hash:  {}'.format(mcanHash)
-    self.__ip = ipAddrStr
-    self.__csip = csipStr
-    self.__csConState = False 
+  yposRow0 =  0
+  yposRow1 =  9
+  yposRow2 = 20
+  yposRow3 = 34
+  yposRow4 = 43
+  yposRow5 = 56
 
-  def set(self):
+  def __init__( self, display, ipAddrStr, mcanHash, csipStr
+              , contactAddr=1, versionStr=VERSION):
     """
     """
-    self.__display.fill(0)
-    self.__display.line(STATE_YPOS, 1)
-    self.__display.line(STATE_YPOS+21,1)
-    oled.text(' 2 4 6 8 0 2 4 6',0,STATE_YPOS+12)
-    
-    self.__display.text(self.__version, 0, 32)
-    #self.__display.text(self.__hash, 0, 37)
+    self.__state = '0000000000000000'
+    self.__csError = '   '
+    self.__display = display
+    #self.__version = 'Hash:{:4}  v{:>4}'.format(str(mcanHash), versionStr)
+    self.__version = 'Trackstate v{:>4}'.format(versionStr)
+    self.__hash = 'MCAN-Hash:  {:4}'.format(str(mcanHash))
+    self.__ip = ipAddrStr
+    self.__ipStr = '{:>16}'.format(self.__ip)
+    self.__csip = csipStr
     csipBytes = self.__csip.split('.')
     if len(csipBytes) == 4:
-      csipLast2Bytes = '.'+ '.'.join(csipBytes[2:])
+      self.__csipLast2Bytes = '.'+ '.'.join(csipBytes[2:])
     else:
-      csipLastByte = 'Err'
-    if self.__csConState:
-      csError = 'OK'
-    else:
-      csError = 'ERR'
-      
-    self.__display.text('CS: {:3} {:>8}'.format(csError, csipLast2Bytes),0,42)
-    self.__display.text('{:>16}'.format(self.__ip), 0, 55)
+      self.__csipLast2Bytes = 'Err CSIP'
+    self.__contactsStr = 'cont.: {:04}-{:04}'.format(contactAddr, contactAddr+15)
+    self.__csConState = False
+
+  def show(self):
+    self.__display.show()
     
-#   def setCsip(self, csip):
-#     self.__csip = csip
-#     if self.__csConError:
-#       csError = 'ERR'
-#     else:
-#       csError = 'con'
-#     self.__display.text('CS: {:3} {:>8}'.format(csError, csipLast2Bytes),0,42)
-    
-  def setCsConState(self, newState):
-    """ set Central Station connection state:
-          True:  connection established
-          False: no connection
+  def set(self):
+    """ 
     """
-    self.__csConState = newState
+    self.__display.fill(0)
+    self.__display.text(self.__contactsStr , 0, self.yposRow1)
+    self.__display.text(self.__ipStr , 0, self.yposRow2)
+
+    self.__display.text('CS:', 0, self.yposRow3)
+    self.__display.text(self.__csError, 32, self.yposRow3)
+    self.__display.text(self.__csipLast2Bytes, 63, self.yposRow3)
+    self.__display.text(self.__hash, 0, self.yposRow4)
+    self.__display.text(self.__version, 0, self.yposRow5)
+   
+  def setTrackstate(self, state):
+    self.__display.text(self.__state, 0, self.yposRow0, color=0)
+    self.__state = state
+    self.__display.text(state, 0, self.yposRow0)
+    
+   
+  def setCsConState(self, state):
+    """ set Central Station connection state:
+            - True:  connection established
+            - False: no connection
+    """
+    self.__csConState = state
+    self.__display.text(self.__csError, 32, self.yposRow3, color=0)
+    if self.__csConState:
+      self.__csError = '  '
+    else:
+      self.__csError = 'ERR'
+    self.__display.text(self.__csError, 32, self.yposRow3)
 
 class CsConnection():
   def __init__(self, csIpAddr, csIpPort, timeoutSec=1):
@@ -100,22 +100,16 @@ class CsConnection():
     self.__csip = csIpAddr    
     self.__tcpPort = csIpPort
     self.__timeoutSec = timeoutSec
-    print('CS-IP:',self.__csip,' Port:',self.__tcpPort)
+    #print('CS-IP:',self.__csip,' Port:',self.__tcpPort)
     self.__connected = False
-    #try: 
-      #self.__socket.setblocking(False)      
-    #except Exception as e:
-      # EHOSTUNREACH
-    #  self.__csConnected = False
-    #  print('ERROR:', e)
 
-  @property
-  def isConnected(self):
-    print('CS connected: {}'.format(self.__connected))
-    return self.__connected
+  # @property
+  # def isConnected(self):
+  #   print('CS connected: {}'.format(self.__connected))
+  #   return self.__connected
 
   def connect(self):
-    self.__socket = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
+    self.__socket = socket( AF_INET, SOCK_STREAM )
     self.__socket.setblocking(False)
     self.__socket.settimeout(self.__timeoutSec)
     try:
@@ -124,15 +118,6 @@ class CsConnection():
     except Exception as e:
       print('Connection error')
       self.__connected = False
-      
-    #try:
-    #    urllib.request.urlopen(self.__csip, timeout=1)
-    #    print('CS found')
-    #    self.__socket.connect((self.__csip, self.__tcpPort))
-    #    self.__connected = True
-    #except urllib.request.URLError:
-    #    print('CS not found')
-    #    self.__connected = False
     
   def close(self):
     self.__socket.close()
@@ -142,10 +127,11 @@ class CsConnection():
     """
     """
     if self.__connected:
-      print('send ({}...) ...'.format(mcanMsg[:15]))
+      # print('send ({}...) ...'.format(mcanMsg[:15]))
       self.__socket.send(mcanMsg)
     else:
-      print('not send ({}...)!'.format(mcanMsg[:15]))
+      # print('not send ({}...)!'.format(mcanMsg[:15]))
+      pass
 
 def pingOk(host, count=1):
     response = ping(host, count=count, quiet=True)
@@ -170,58 +156,40 @@ if __name__ == '__main__':
   mcanCmd = mcancommand.McanCommand(int(mcanHash))
   mcanCmd.setCommand(0x22,response=True)
 
-  #TIMER.init(period=20, mode=Timer.PERIODIC, callback=handleInterrupt)
   currState = mp.valueByte
   csConnection = CsConnection(CSIP, CSPORT)
   
-  infoText = InfoText(oled, wlan.ifconfig()[0], mcanHash, CSIP)
+  infoText = InfoText(oled, wlan.ifconfig()[0], mcanHash, CSIP, contactAddr=CONTACTBASE)
   infoText.set()
   csConStateOk = pingOk(CSIP)
   infoText.setCsConState(csConStateOk)
   
   trackstates.setStateBits(currState)
   
-  oled.text(trackstates.shortStr,0, STATE_YPOS+4)
-  oled.show()
+  infoText.setTrackstate(trackstates.shortStr)
+  infoText.show()
   while True:
     currState = mp.valueByte
+    csConStateOk = pingOk(CSIP)
+    infoText.setCsConState(csConStateOk) # showed only if trackstate changes
     trackstates.setStateBits(currState)
-    print(currState)
+    #print(currState)
     if trackstates.isChanged:
-      infoText.set()
-      csConStateOk = pingOk(CSIP)
-      infoText.setCsConState(csConStateOk)
-      oled.text(trackstates.shortStr, 0, STATE_YPOS+4)
-      oled.show()
+      infoText.setTrackstate(trackstates.shortStr)
+      infoText.show()
       if csConStateOk:
-        #csConnection.connect()
+        csConnection.connect()
         #result = csConnection.isConnected
         pass
       for subId, state, recentState in trackstates.changedStates:
         contactNo = CONTACTBASE + subId
         mcanCmd.setTrackState(DEVICEID, contactNo, state, recentState)
         if csConStateOk:
-         #csConnection.send(mcanCmd.frame)
+         csConnection.send(mcanCmd.frame)
          print(DEVICEID, contactNo, state, mcanCmd.frame)
       if csConStateOk:
-        #csConnection.close()
+        csConnection.close()
         pass
 
     trackstates.setRecentToCurrent()
-    #time.sleep_ms(100)
-    #print('new tick')
-
-#   while csConnetion is None:
-#     try:
-#       
-#       oled.text('connection Ok.',8,1)
-#       oled.show()
-#     except:
-#       oled.fill(0)
-#       oled.text('ERROR',44,1)
-#       oled.text('Central Station',0,16)
-#       oled.text(CSIP,8,25)
-#       oled.text('not found.',8,33)
-#       oled.text(wlan.ifconfig()[0],0,55)
-#       oled.show()
-#       #conn = None
+    #time.sleep_us(100000)
