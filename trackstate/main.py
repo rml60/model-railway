@@ -16,15 +16,15 @@
 #from machine import Timer
 from usocket import socket, AF_INET, SOCK_STREAM
 from utime import sleep_us
-from uping import ping
 
 from hardware import hc4067
 from mcan import mcanhash, mcancommand, states
+from tools import uping
 
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-VERSION = '0.07'
+VERSION = '0.08'
 
 #-------------------------------------------------------------------------------
 # classes and functions
@@ -103,11 +103,6 @@ class CsConnection():
     #print('CS-IP:',self.__csip,' Port:',self.__tcpPort)
     self.__connected = False
 
-  # @property
-  # def isConnected(self):
-  #   print('CS connected: {}'.format(self.__connected))
-  #   return self.__connected
-
   def connect(self):
     self.__socket = socket( AF_INET, SOCK_STREAM )
     self.__socket.setblocking(False)
@@ -134,7 +129,7 @@ class CsConnection():
       pass
 
 def pingOk(host, count=1):
-    response = ping(host, count=count, quiet=True)
+    response = uping.ping(host, count=count, quiet=True)
     return response[1] == count
 #-------------------------------------------------------------------------------
 # main
@@ -148,15 +143,12 @@ if __name__ == '__main__':
   # s2:  4067-pin14 - esp32-d14-pin26
   # s3:  4067-pin13 - esp32-d15-pin3
   mp = hc4067.Hc4067( pinSig=32, pinS0=12, pinS1=13, pinS2=14, pinS3=15 )
-  currState = mp.value
-  recentState = currState
   trackstates = states.States()
 
   mcanHash = mcanhash.McanHash(macAddr)
   mcanCmd = mcancommand.McanCommand(int(mcanHash))
   mcanCmd.setCommand(0x22,response=True)
 
-  currState = mp.value
   csConnection = CsConnection(CSIP, CSPORT)
   
   infoText = InfoText(oled, wlan.ifconfig()[0], mcanHash, CSIP, contactAddr=CONTACTBASE)
@@ -164,32 +156,28 @@ if __name__ == '__main__':
   csConStateOk = pingOk(CSIP)
   infoText.setCsConState(csConStateOk)
   
+  currState = mp.value
   trackstates.setStateBits(currState)
-  
   infoText.setTrackstate(trackstates.shortStr)
   infoText.show()
+
   while True:
-    currState = mp.value
-    csConStateOk = pingOk(CSIP)
-    infoText.setCsConState(csConStateOk) # showed only if trackstate changes
-    trackstates.setStateBits(currState)
-    #print(currState)
-    if trackstates.isChanged:
+    if mp.changed:
+      currState = mp.value
+      csConStateOk = pingOk(CSIP)
+      infoText.setCsConState(csConStateOk) # showed only if trackstate changes
+      trackstates.setStateBits(currState)
       infoText.setTrackstate(trackstates.shortStr)
       infoText.show()
       if csConStateOk:
         csConnection.connect()
-        #result = csConnection.isConnected
-        pass
       for subId, state, recentState in trackstates.changedStates:
         contactNo = CONTACTBASE + subId
         mcanCmd.setTrackState(DEVICEID, contactNo, state, recentState)
         if csConStateOk:
-         csConnection.send(mcanCmd.frame)
-         print(DEVICEID, contactNo, state, mcanCmd.frame)
+          csConnection.send(mcanCmd.frame)
+        else:
+          print(DEVICEID, contactNo, state, mcanCmd.frame)
       if csConStateOk:
         csConnection.close()
-        pass
-
-    trackstates.setRecentToCurrent()
-    #time.sleep_us(100000)
+      trackstates.setRecentToCurrent()
