@@ -18,7 +18,7 @@ from usocket import socket, AF_INET, SOCK_STREAM
 from utime import sleep_us
 from uping import ping
 
-from hc4067 import Hc4067
+from hardware import hc4067
 from mcan import mcanhash, mcancommand, states
 
 #-------------------------------------------------------------------------------
@@ -147,8 +147,8 @@ if __name__ == '__main__':
   # s1:  4067-pin11 - esp32-d13-pin28
   # s2:  4067-pin14 - esp32-d14-pin26
   # s3:  4067-pin13 - esp32-d15-pin3
-  mp = Hc4067( pinSig=32, pinS0=12, pinS1=13, pinS2=14, pinS3=15 )
-  currState = mp.valueByte
+  mp = hc4067.Hc4067( pinSig=32, pinS0=12, pinS1=13, pinS2=14, pinS3=15 )
+  currState = mp.value
   recentState = currState
   trackstates = states.States()
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
   mcanCmd = mcancommand.McanCommand(int(mcanHash))
   mcanCmd.setCommand(0x22,response=True)
 
-  currState = mp.valueByte
+  currState = mp.value
   csConnection = CsConnection(CSIP, CSPORT)
   
   infoText = InfoText(oled, wlan.ifconfig()[0], mcanHash, CSIP, contactAddr=CONTACTBASE)
@@ -169,7 +169,7 @@ if __name__ == '__main__':
   infoText.setTrackstate(trackstates.shortStr)
   infoText.show()
   while True:
-    currState = mp.valueByte
+    currState = mp.value
     csConStateOk = pingOk(CSIP)
     infoText.setCsConState(csConStateOk) # showed only if trackstate changes
     trackstates.setStateBits(currState)
